@@ -388,7 +388,22 @@ func (s *Server) Stop() {
 	}
 
 	s.log.CloseTelemetry()
-
+	// pipePath := "/tmp/algorand-input"
+	// _, error := os.Stat(pipePath)
+	// if !os.IsNotExist(error) {
+	// 	err := os.Remove(pipePath)
+	// 	if err != nil {
+	// 			s.log.Error(err)
+	// 	}
+	// }
+	// pipePathOutput := "/tmp/scrooge-output"
+	// _, error = os.Stat(pipePathOutput)
+	// if !os.IsNotExist(error) {
+	// 	err := os.Remove(pipePathOutput)
+	// 	if err != nil {
+	// 			s.log.Error(err)
+	// 	}
+	// }
 	os.Remove(s.pidFile)
 	os.Remove(s.netFile)
 	os.Remove(s.netListenFile)

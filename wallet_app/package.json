@@ -1,0 +1,16 @@
+{
+  "name": "wallet_app",
+  "version": "1.0.0",
+  "description": "hi",
+  "main": "client.js",
+  "dependencies": {
+    "@randlabs/myalgo-connect": "^1.4.2",
+    "algosdk": "^2.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
