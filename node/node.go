@@ -50,11 +50,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/scrooge"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/algorand/go-deadlock"
+	"github.com/mmurray22/ipc-pkg"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -337,7 +340,47 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
-
+	path_to_algorand := "/tmp/algorand-input"
+	//path_to_algorand_one := "/tmp/algorand-input-node1"
+	final_sequence_id := 100000
+	ipc.CreatePipe(path_to_algorand)
+	//ipc.CreatePipe(path_to_algorand_one)
+	rawData := make(chan []byte, final_sequence_id)
+	//rawDataOne := make(chan []byte, 100000)
+	scroogeRequests := make(chan *scrooge.ScroogeRequest, final_sequence_id)
+	//scroogeRequestsOne := make(chan *scrooge.ScroogeRequest, 1000)
+	err = ipc.OpenPipeWriter(path_to_algorand, rawData)
+	if err != nil {
+		return nil, err
+	}
+	for sequenceNumber := 0; sequenceNumber < final_sequence_id; sequenceNumber++ {
+		scroogeRequests <- &scrooge.ScroogeRequest{
+			Request: &scrooge.ScroogeRequest_SendMessageRequest{
+				SendMessageRequest: &scrooge.SendMessageRequest{
+					Content: &scrooge.CrossChainMessageData{
+						MessageContent:  make([]byte, 0, final_sequence_id), //[]byte("hello"),
+						SequenceNumber: uint64(sequenceNumber),
+					},
+				//TODO RECOMPILE SCROOGE ValidityProof: []byte("lol trust me on this one"),
+				},
+			},
+		}
+	}
+	var count int = 0
+	for request := range scroogeRequests {
+		requestBytes, err := proto.Marshal(request)
+		if err == nil {
+			rawData <- requestBytes
+			//rawDataOne <- requestBytes
+		} else {
+			return nil, err
+		}
+		count += 1
+		if count == final_sequence_id {
+			close(scroogeRequests)
+			break
+		}
+	}
 	return node, err
 }
 

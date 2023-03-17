@@ -28,6 +28,7 @@ require (
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.27
+	github.com/mmurray22/ipc-pkg v1.1.2
 	github.com/olivere/elastic v6.2.14+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v0.0.3
@@ -35,6 +36,7 @@ require (
 	golang.org/x/crypto v0.1.0
 	golang.org/x/sys v0.1.0
 	golang.org/x/text v0.4.0
+	google.golang.org/protobuf v1.29.0
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 )
 
