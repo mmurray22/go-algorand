@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,8 @@ import (
 // intermediate changes.
 func TestBalanceAdapterStateChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	source := `#pragma version 2
