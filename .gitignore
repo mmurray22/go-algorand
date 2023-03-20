@@ -68,3 +68,6 @@ index.html
 
 # test summary
 testresults.json
+
+# Wallet app
+wallet_app/node_modules/*
