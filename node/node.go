@@ -361,7 +361,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 						MessageContent:  make([]byte, 0, final_sequence_id), //[]byte("hello"),
 						SequenceNumber: uint64(sequenceNumber),
 					},
-				//TODO RECOMPILE SCROOGE ValidityProof: []byte("lol trust me on this one"),
+				ValidityProof: []byte("lol trust me on this one"),
 				},
 			},
 		}
