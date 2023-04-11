@@ -1,29 +1,9 @@
-//import MyAlgoConnect from '@randlabs/myalgo-connect';
-//import algosdk from 'algosdk';
 const algosdk = require("algosdk");
 const MyAlgoConnect = require('@randlabs/myalgo-connect');
-const api_token0 = 'b2c3d79ef5621b161ff6bb13ed4d4cf58cc0f0bfac2494db7a1e06cb199d135a';
-const server0 = 'http://127.0.0.1';
-const port0 = 8080;
+var net = require('net');
 
-const api_token1 = '9c16e8dbd211a5397089c5f05d07d6d003c45349125983b38779549d5dce031e';
-const kmd_token1 = '2e3600bab37616b230116e1fecdbd8d23bfad950e3728448910c7dc62cc26c90';
-const server1 = 'http://127.0.0.1';
-const port1 = 38665;
-
-
-const algodClientNode0 = new algosdk.Algodv2(api_token0, server0, port0);
-const algodClientNode1 = new algosdk.Algodv2(api_token1, server1, port1);
-const myAlgoConnect = new MyAlgoConnect();
-(async () => {
-	  console.log(await algodClientNode1.status().do());
-	})().catch((e) => {
-		console.log(e);
-	}
-);
-
-async function getLocalAccounts(server1, port1) {
-  const kmdClient = new algosdk.Kmd(kmd_token1, server1, port1);
+async function getLocalAccounts(server, port, kmd_token) {
+  const kmdClient = new algosdk.Kmd(kmd_token, server, port);
   console.log('CONSOLE 1.5')
   const kmdVersion = await kmdClient.versions();
   console.log('Version: ', kmdVersion)
@@ -32,11 +12,11 @@ async function getLocalAccounts(server1, port1) {
   let walletId;
   // eslint-disable-next-line no-restricted-syntax
   for (const wallet of wallets.wallets) {
-    if (wallet.name === 'unencrypted-default-wallet') walletId = wallet.id;
+    if (wallet.name === 'test_wallet') walletId = wallet.id;
   }
 
   if (walletId === undefined)
-    throw Error('No wallet named: unencrypted-default-wallet');
+    throw Error('No wallet named: test_wallet');
 
   const handleResp = await kmdClient.initWalletHandle(walletId, '');
   const handle = handleResp.wallet_handle_token;
@@ -67,107 +47,142 @@ async function getLocalAccounts(server1, port1) {
   });
 }
 
-async function createWallet() {
-  // example: KMD_CREATE_CLIENT
-  const kmdtoken = 'a'.repeat(64);
-  const kmdserver = 'http://localhost';
-  const kmdport = 4002;
+async function algorand_communication() {
+    /* Constants necessary to establish connection to the Algorand network/KMD instance */
+    const api_token1 = 'e86f3f918269e4da5cae0ab0772e2673b0b2fc004d0289f741367364e803a212';
+    const kmd_token1 = 'a32efca526779b780a6843fad7e9767ffc11738e09bb9ffa766ca2466f408f2f';
+    const send_acct = 'UHU4KULWWUBEWD2WDOTPYHEBKEOOW7OVOKQBN2VILVOL64DMG5JVEVQP2E';
+    const receive_acct = '3ROSD2VGVMBFILE3RJTXXELD6S3RFDVUTPPTZ4USJLRWZOMTK4XQK5FV7I';
+    const serverUrl = 'http://127.0.0.1'
+    const server1 = '127.0.0.1';
+    const algoPort1 = 8080;
+    const kmdPort1 = 7833;
+    const walletPort = parseInt(process.argv[2]);//1234;
+    const clientPort = parseInt(process.argv[3]);//4003; 
+    const algorandPort = parseInt(process.argv[4]);//3456;
+    const clientServer = process.argv[5]; //'128.110.218.141';
+    notes = []
+    final_txn = false
+    counter = 0
+    const algodClientNode1 = new algosdk.Algodv2(api_token1, serverUrl, algoPort1);
+    const myAlgoConnect = new MyAlgoConnect();
+    const params = await algodClientNode1.getTransactionParams().do();
+    const accounts = await getLocalAccounts(serverUrl, kmdPort1, kmd_token1);
+    console.log('Accounts: ', accounts);
+    console.log('Done with setup!')
 
-  const kmdclient = new algosdk.Kmd(kmdtoken, kmdserver, kmdport);
-  // example: KMD_CREATE_CLIENT
 
-  // example: KMD_CREATE_WALLET
-  const walletName = 'testWallet1';
-  const password = 'testpassword';
-  // MDK is undefined since we are creating a completely new wallet
-  const masterDerivationKey = undefined;
-  const driver = 'sqlite';
+    /****** CLIENT COMMUNICATION CODE  ********/
+    /* Server setup */
+    var server = net.createServer((connection) => { 
+	    console.log('client connected');
 
-  const wallet = await kmdclient.createWallet(
-    walletName,
-    password,
-    masterDerivationKey,
-    driver
-  );
-  const walletID = wallet.wallet.id;
-  console.log('Created wallet:', walletID);
-  // example: KMD_CREATE_WALLET
+      /* Executes when new data comes in */
+	    connection.on('data', function(data) {
+        var txns = []
+        var json_arr = data.toString().trim().split('\n');
+        console.log("JSONs: ", json_arr)
+        for (var i = 0; i < json_arr.length; i++) {
+          const response = JSON.parse(json_arr[i]);
+          if (response.error) {
+            console.log("Error: " + response.error.message);
+          } else {
+            console.log("Result: " + response);
+            if (response.sequence_id >= 0) {
+              // notes.push(response.value);
+              const buffer = new ArrayBuffer(8);
+              const uint8Array = new Uint8Array(buffer);
+              uint8Array[0] = counter
+              counter += 1
+              console.log(uint8Array)
+              const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+                suggestedParams: {
+                  ...params,
+                },
+                from: send_acct,
+                to: receive_acct,
+                amount: 100030 + counter,
+                note: uint8Array, // TODO: Update values so that you can filll this in!
+              });
+              /* Get accounts and send transaction */
+              const signedTxn = txn.signTxn(accounts[0].privateKey);
+              const txBytes = Buffer.from(signedTxn, 'base64')
+              txns.push(txBytes)
+              // console.log(notes); 
+            } else {
+              final_txn = true;
+              break;
+            }
+          }
+        }
+        Promise.all(new Array(txns.length).fill(0).map((_, i) => new Promise(async (resolve, reject) => {
+          try {
+            while (true) {
+              if (final_txn) {
+                const result = await algodClientNode1.sendRawTransaction(txns[i]).do();
+                resolve(result);
+                break;
+              }
+            }
+          } catch (error) {
+            reject(error);
+          }
+        }))).then((values) =>{
+          console.log("Values: ", values)
+          // const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
+          //   console.log('Connected to Client');
+          //   const response = '{"ack_count": 0}';
+          //   console.log("Response!");
+          //   clientSocket.write(response);
+          //   clientSocket.end();
+          // });
+        });
+	    });
 
-  // example: KMD_CREATE_ACCOUNT
-  // wallet handle is used to establish a session with the wallet
-  const wallethandle = (
-    await kmdclient.initWalletHandle(walletID, 'testpassword')
-  ).wallet_handle_token;
-  console.log('Got wallet handle:', wallethandle);
+      /* Reports when it detects the client has ended */
+	    connection.on('end', async function() {
+		    console.log('client disconnected');    
+	    });
+    });
+    server.on('listening', () => {
+      console.log('Server is listening on a port')
+    });
+    server.listen(walletPort, function() {
+	    console.log('server is listening!')
+    });
+    /* TODO Get response and forward on to the client interface */
+    var algorandListener = net.createServer((connection) => {
+      connection.on('data', function(data) {
+        console.log("Received from algorand: ", data.toString());
+        /* TODO: Get the ack from the data */
+        const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
+          console.log('Connected to Client');
+          const response = '{"ack_count": 0}';
+          console.log("Response!");
+          clientSocket.write(response);
+          clientSocket.end();
+        });
+      });
+    });
+    algorandListener.on('listening', () => {
+      console.log('Algorand listener is listening on a port')
+    });
+    algorandListener.listen(algorandPort, function() {
+	    console.log('Algorand listener is listening!')
+    });
 
-  const { address } = await kmdclient.generateKey(wallethandle);
-  console.log('Created new account:', address);
-  // example: KMD_CREATE_ACCOUNT
-
-  // example: KMD_EXPORT_ACCOUNT
-  const accountKey = await kmdclient.exportKey(wallethandle, password, address);
-  const accountMnemonic = algosdk.secretKeyToMnemonic(accountKey.private_key);
-  console.log('Account Mnemonic: ', accountMnemonic);
-  // example: KMD_EXPORT_ACCOUNT
-
-  // example: KMD_IMPORT_ACCOUNT
-  const newAccount = algosdk.generateAccount();
-  console.log('Account: ', newAccount.addr);
-  const importedAccount = await kmdclient.importKey(
-    wallethandle,
-    newAccount.sk
-  );
-  console.log('Account successfully imported: ', importedAccount);
-  // example: KMD_IMPORT_ACCOUNT
-
-  // example: KMD_RECOVER_WALLET
-  const exportedMDK = (
-    await kmdclient.exportMasterDerivationKey(wallethandle, 'testpassword')
-  ).master_derivation_key;
-  const recoveredWallet = await kmdclient.createWallet(
-    'testWallet2',
-    'testpassword',
-    exportedMDK,
-    'sqlite'
-  );
-  const recoeveredWalletID = recoveredWallet.wallet.id;
-
-  console.log('Created wallet: ', recoeveredWalletID);
-
-  const recoveredWalletHandle = (
-    await kmdclient.initWalletHandle(recoeveredWalletID, 'testpassword')
-  ).wallet_handle_token;
-  console.log('Got wallet handle: ', recoveredWalletHandle);
-
-  const recoveredAddr = (await kmdclient.generateKey(recoveredWalletHandle))
-    .address;
-  console.log('Recovered account: ', recoveredAddr);
-  // example: KMD_RECOVER_WALLET
 }
+algorand_communication();
 
-(async () => {
-	console.log('Console 1')
-	const accounts = await createWallet();
-	/*const accounts = await getLocalAccounts(server1, port1);
-	console.log('Console 2')
-	//const accountsSharedByUser = await myAlgoConnect.connect();
-	const params = await algodClientNode1.getTransactionParams().do();
-	//print(params.gensisHash)
-	const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-	  suggestedParams: {
-		        ...params,
-	  },
-	  from: 'PNBE4HIZJSAUHCVCTOH7X6YHDNH2DXH6EF5SZCDSMQNBISQ4WI7GZ6HMEE',
-	  to: 'LYMCGSOD6IB3GFCMNRQM7NHEJWHW3OW57VP5DJI4UA4LJWTL6JA5FCQEKM',
-	  amount: 1000,
-	});
-	const signedTxn = txn.signTxn(accounts[0].privateKey);
-	//const [ signedTxn ] = await myAlgoConnect.signTxns([{
-	//	  txn: Buffer.from(txn.toByte()).toString('base64')
-	//}]);
-	const txBytes = Buffer.from(signedTxn, 'base64')
-	const response = await algodClientNode1.sendRawTransaction(txBytes).do();
-	console.log('RESPONSE: ', response)*/
-})().catch((e) => {
-	  console.log(e);
-});
+/***** Dead Code that may have a purpose ****/
+// (async () => {
+//   console.log(await algodClientNode1.status().do());
+// })().catch((e) => {
+//   console.log(e);
+// }
+// );
+//const [ signedTxn ] = await myAlgoConnect.signTxns([{\
+// txn: Buffer.from(txn.toByte()).toString('base64')
+//}]);
+//const accountsSharedByUser = await myAlgoConnect.connect();
+//const accounts = await createWallet(kmd_token1, server1, port1);
