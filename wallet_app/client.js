@@ -1,5 +1,5 @@
 const algosdk = require("algosdk");
-const MyAlgoConnect = require('@randlabs/myalgo-connect');
+//const MyAlgoConnect = require('@randlabs/myalgo-connect');
 var net = require('net');
 
 async function getLocalAccounts(server, port, kmd_token) {
@@ -49,10 +49,10 @@ async function getLocalAccounts(server, port, kmd_token) {
 
 async function algorand_communication() {
     /* Constants necessary to establish connection to the Algorand network/KMD instance */
-    const api_token1 = 'e86f3f918269e4da5cae0ab0772e2673b0b2fc004d0289f741367364e803a212';
-    const kmd_token1 = 'a32efca526779b780a6843fad7e9767ffc11738e09bb9ffa766ca2466f408f2f';
-    const send_acct = 'UHU4KULWWUBEWD2WDOTPYHEBKEOOW7OVOKQBN2VILVOL64DMG5JVEVQP2E';
-    const receive_acct = '3ROSD2VGVMBFILE3RJTXXELD6S3RFDVUTPPTZ4USJLRWZOMTK4XQK5FV7I';
+    const api_token1 = '07a57868eb6a51df4c9bfc2bb2c24093e396f308388e204dda157a3cfa2e6458';
+    const kmd_token1 = '180ba7110339b8f21e3324fb74f430930217d13ab9f6f1f128f484d5a5c64b7b';
+    const send_acct = 'GEOVLD7STUY5BS2ORLLG5G4IYRN7Y6T2NLDPH2UGD4O4Q26MKAV2ANMLWU'; // Node 1 account
+    const receive_acct = 'FUFE2QZC2JDSNS5HX3AQXHOVU5LFKV4HYVCULVZMSLDXFRP7Q76L4OUKM4'; // Node 2 account
     const serverUrl = 'http://127.0.0.1'
     const server1 = '127.0.0.1';
     const algoPort1 = 8080;
@@ -65,7 +65,7 @@ async function algorand_communication() {
     final_txn = false
     counter = 0
     const algodClientNode1 = new algosdk.Algodv2(api_token1, serverUrl, algoPort1);
-    const myAlgoConnect = new MyAlgoConnect();
+    //const myAlgoConnect = new MyAlgoConnect();
     const params = await algodClientNode1.getTransactionParams().do();
     const accounts = await getLocalAccounts(serverUrl, kmdPort1, kmd_token1);
     console.log('Accounts: ', accounts);
@@ -173,16 +173,3 @@ async function algorand_communication() {
 
 }
 algorand_communication();
-
-/***** Dead Code that may have a purpose ****/
-// (async () => {
-//   console.log(await algodClientNode1.status().do());
-// })().catch((e) => {
-//   console.log(e);
-// }
-// );
-//const [ signedTxn ] = await myAlgoConnect.signTxns([{\
-// txn: Buffer.from(txn.toByte()).toString('base64')
-//}]);
-//const accountsSharedByUser = await myAlgoConnect.connect();
-//const accounts = await createWallet(kmd_token1, server1, port1);

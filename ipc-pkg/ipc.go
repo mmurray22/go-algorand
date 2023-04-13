@@ -6,12 +6,11 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"syscall"
-	"fmt"
-	"time"
 )
 
 const O_NONBLOCK = syscall.O_NONBLOCK
@@ -36,68 +35,37 @@ func CreatePipe(pipePath string) error {
 // Blocking call to output the data pipePath into pipeData
 // Reads data from the pipe in format [size uint64, bytes []byte] where len(bytes) == size and (pipeData <- bytes)
 // All data is in little endian format
-func OpenPipeReader(pipePath string, pipeData chan<- []byte) error {
+func OpenPipeReader(pipePath string, pipeData chan<- []byte) {
 	if !doesFileExist(pipePath) {
-		return errors.New("File doesn't exist")
+		fmt.Println("File doesn't exist")
 	}
 
-	// pipeChannel := make(chan []byte, 10)
-	pipe, pipeErr := os.OpenFile(pipePath, os.O_RDONLY | O_NONBLOCK, 0777)
-	if pipeErr != nil {
-		fmt.Println("Cannot open pipe for reading:", pipeErr)
+	setupCloseHandler()
+
+	pipe, fileErr := os.OpenFile(pipePath, os.O_RDONLY, 0777)
+	if fileErr != nil {
+		fmt.Println("Cannot open pipe for reading:", fileErr)
 	}
 	defer pipe.Close()
+	defer close(pipeData)
 	reader := bufio.NewReader(pipe)
-	const numSizeBytes = 64 / 8
-	go func(pipeChannel chan<- []byte) {
-		setupCloseHandler()
-		for {
-			readDataSize := make([]byte, numSizeBytes)
-			bytesRead, readErr := io.ReadFull(reader, readDataSize)
-			_ = bytesRead
-			if readErr != nil || readDataSize == nil {
-				// readErr is nil
-				time.Sleep(1 * time.Second)
-				continue
-			} else {
-				readSize := binary.LittleEndian.Uint64(readDataSize[:])
-				readData := make([]byte, readSize)
-				fileContents, readErr := io.ReadFull(reader, readData)
-				_ = fileContents
-				if readErr != nil || readData == nil {
-					time.Sleep(1 * time.Second)
-					continue
-				} else {
-					pipeChannel <- readData
-				}
-			}
 
-            // Wait for a short amount of time before reading again
-            time.Sleep(1 * time.Second)
-		// 	// select {
-		// 	// case <- done:
-		// 	// 	return
-		// 	// default:
-			// const numSizeBytes = 64 / 8
+	for {
+		const numSizeBytes = 64 / 8
 
-			// readSizeBytes := loggedRead(reader, numSizeBytes)
-			// if readSizeBytes == nil {
-			// 	fmt.Println("File is empty")
-			// 	continue
-			// }
-			// _ = readSizeBytes
-			// readSize := binary.LittleEndian.Uint64(readSizeBytes[:])
+		readSizeBytes := loggedRead(reader, numSizeBytes)
+		if readSizeBytes == nil {
 
-			// readData := loggedRead(reader, readSize)
-
-			// pipeChannel <- readData
-			// time.Sleep(time.Millisecond * 100) // wait for a bit before polling again
-		// 	// }
+			break
 		}
+		readSize := binary.LittleEndian.Uint64(readSizeBytes[:])
 
-	}(pipeData)
-
-	return nil
+		readData := loggedRead(reader, readSize)
+		if readData == nil {
+			break
+		}
+		pipeData <- readData
+	}
 }
 
 // Blocking call that will continously write the data pipeInput into pipePath

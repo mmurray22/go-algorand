@@ -5,7 +5,7 @@
   "main": "client.js",
   "dependencies": {
     "@randlabs/myalgo-connect": "^1.4.2",
-    "algosdk": "^2.1.0"
+    "algosdk": "^2.2.0"
   },
   "devDependencies": {},
   "scripts": {

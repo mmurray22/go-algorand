@@ -19,20 +19,20 @@ package node
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-	"net"
-	"encoding/gob"
 
-	"github.com/algorand/go-algorand/scrooge"
 	"github.com/algorand/go-algorand/ipc-pkg"
+	"github.com/algorand/go-algorand/scrooge"
+
 	// "github.com/mmurray22/ipc-pkg"
-	"google.golang.org/protobuf/proto"
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -61,6 +61,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/algorand/go-deadlock"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -180,9 +181,9 @@ type TxnWithStatus struct {
 	ApplyData transactions.ApplyData
 }
 
-// WalletResponse 
+// WalletResponse
 type WalletResponse struct {
-    Ack uint64 `json:"num"`
+	Ack uint64 `json:"num"`
 }
 
 // MakeFull sets up an Algorand full node
@@ -348,96 +349,96 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
-	//ipc.CreatePipe(path_to_scrooge)
-	//ipc.CreatePipe(path_to_algorand_one)
-	//rawDataOne := make(chan []byte, 100000)
-	//scroogeRequestsOne := make(chan *scrooge.ScroogeRequest, 1000)
-	completeIpcSendChan := make(chan bool)
-	go func() { // TODO: ENSURE THAT REPEAT 
-		for true {
+	go func() {
+		/**
+		* TODO to refine:
+		* - Don't send the same message more than once
+		* - actually update sequenceNumber like you do with ack_num
+		 */
+		// break_bool := true
+
+		path_to_algorand := "/tmp/scrooge-input" // TODO: scrooge-input
+		err = ipc.CreatePipe(path_to_algorand)
+		node.log.Infof("THIS GO FUNC IS CALLED NOW")
+		if err != nil {
+			node.log.Infof("UNABLE TO CREATE PIPE: %v", err)
+		}
+		node.log.Infof("Pipe created for input!")
+
+		rawData := make(chan []byte)
+		scroogeRequests := make(chan *scrooge.ScroogeRequest)
+		defer close(rawData)
+		defer close(scroogeRequests)
+		err = ipc.OpenPipeWriter(path_to_algorand, rawData)
+		if err != nil {
+			node.log.Infof("THERE WAS AN ERROR!!!!!!: %v", err)
+		}
+		start := time.Now()
+		for time.Since(start) < time.Second*100 {
 			txns, err := node.GetPendingTxnsFromPool()
 			for len(txns) < 1 {
 				txns, err = node.GetPendingTxnsFromPool()
 			}
-			// txn_str = strings.Join(txns[0], " ")
-			// var txnElt transactions.SignedTxn 
-			// err = json.Unmarshal([]byte(txns[0]), &txnElt)
-			node.log.Infof("THE Length of transactions: %v and any errors? %v", txns[0].Txn.Note, err)
-			path_to_algorand := "/tmp/algorand-input"
 			final_sequence_id := len(txns)
-			ipc.CreatePipe(path_to_algorand)
-			rawData := make(chan []byte, 100000)
-			scroogeRequests := make(chan *scrooge.ScroogeRequest, 100000)
-			// sampleAddress, err := basics.UnmarshalChecksumAddress("3ROSD2VGVMBFILE3RJTXXELD6S3RFDVUTPPTZ4USJLRWZOMTK4XQK5FV7I") // TODO
-			//txns, err := node.ListTxns(sampleAddress, 0, 10000)
-			
-			// for txn in txns { 
-			// 	print(txn.Txn.Header.Note)
-			// }
-			err = ipc.OpenPipeWriter(path_to_algorand, rawData)
-			for sequenceNumber := 0; sequenceNumber < final_sequence_id; sequenceNumber++ {
+			node.log.Infof("FINAL!!!!!! Sequence number: %v", final_sequence_id)
+			for sequenceNumber := 0; sequenceNumber < final_sequence_id; sequenceNumber++ { // TODO: update sequenceNumber
 				// txns[sequenceNumber]."Txn"["Note"]
-				scroogeRequests <- &scrooge.ScroogeRequest{
+				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Note, err)
+				request := &scrooge.ScroogeRequest{
 					Request: &scrooge.ScroogeRequest_SendMessageRequest{
 						SendMessageRequest: &scrooge.SendMessageRequest{
 							Content: &scrooge.CrossChainMessageData{
-								MessageContent:  txns[sequenceNumber].Txn.Note,
+								MessageContent: txns[sequenceNumber].Txn.Note,
 								SequenceNumber: uint64(sequenceNumber),
 							},
 							ValidityProof: []byte("lol trust me on this one"),
 						},
 					},
 				}
-			}
-			var count int = 0
-			for request := range scroogeRequests {
 				requestBytes, err := proto.Marshal(request)
 				if err == nil {
 					rawData <- requestBytes
-				} else {
-					completeIpcSendChan <- false
+					node.log.Infof("Bytes sent over the ipc NEW!")
 				}
-				count += 1
-				if count == final_sequence_id {
-					close(scroogeRequests)
-					break
-				}
+				// if count == final_sequence_id {
+				// 	break_bool = false
+				// 	break
+				// }
 			}
+			node.log.Infof("DONE WITH THE FOR LOOP!!! Sequence number: %v", final_sequence_id)
+
 		}
-		completeIpcSendChan <- true
 	}()
 
-    completeIpcReceiveChan := make(chan bool)
 	go func() { // This is the thread which sends Scrooge output back to the wallet
 		path_to_scrooge := "/tmp/scrooge-output"
 		output_sequence_length := 10
+		_ = output_sequence_length
 		var ack_count uint64 = 0
-		for true {
-			ipc.CreatePipe(path_to_scrooge)
-			rawData := make(chan []byte, output_sequence_length)
-			scroogeTransfers := make(chan *scrooge.ScroogeTransfer, output_sequence_length)
-			err = ipc.OpenPipeReader(path_to_scrooge, rawData)
-			if err != nil {
-				node.log.Errorf("PIPE UNABLE TO OPEN!")
-				completeIpcReceiveChan <- false
-			}
+		ipc.CreatePipe(path_to_scrooge)
+		node.log.Infof("Pipe created!")
+		rawData := make(chan []byte)
+		go ipc.OpenPipeReader(path_to_scrooge, rawData)
+		node.log.Infof("Pipe reader opened!")
+		start := time.Now()
+		for time.Since(start) < time.Second*100 { // TODO REMEMBER THIS!!! CHANGE IF WANT TO RUN FOR LONGER
 			for data := range rawData {
+				node.log.Infof("WE ARE GETTING HERE!")
 				var scroogeTransfer scrooge.ScroogeTransfer
 				err := proto.Unmarshal(data, &scroogeTransfer)
 				if err == nil {
-					scroogeTransfers <- &scroogeTransfer
 					if scroogeTransfer.GetCommitAcknowledgment() != nil {
 						node.log.Infof("Received acknowledgement!")
 						node.log.Infof("Ack count packet: {}", scroogeTransfer.GetCommitAcknowledgment().String())
 						max_ack := scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber()
 						node.log.Infof("Ack count sequence_id: {}", scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber())
+						conn, err := net.Dial("tcp", "127.0.0.1:3456") // TODO Async dial, sleep/while
 						for ack_count <= max_ack {
-							conn, err := net.Dial("tcp", "127.0.0.1:3456")
 							if err != nil {
 								panic(err)
 							}
-							defer conn.Close()
-							message := WalletResponse{Ack: ack_count} /*PARSE SCROOGE TRANSFER!!!*/
+							// defer conn.Close()
+							message := WalletResponse{Ack: ack_count}
 							encoder := gob.NewEncoder(conn)
 							err = encoder.Encode(message)
 							if err != nil {
@@ -445,19 +446,19 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 							}
 							ack_count += 1
 						}
+						conn.Close()
 					} else if scroogeTransfer.GetUnvalidatedCrossChainMessage() != nil {
 						node.log.Infof("Received valid message from other application! Do nothing.")
 						continue
 					} else {
+						node.log.Errorf("Error not a valid scrooge transfer!")
 						panic(err)
 					}
 				} else {
 					node.log.Errorf("Error deserializing ScroogeTransfer")
-					completeIpcReceiveChan <- false
 				}
 			}
 		}
-		completeIpcReceiveChan <- true
 	}()
 	return node, err
 }
