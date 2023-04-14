@@ -19,7 +19,7 @@ package node
 
 import (
 	"context"
-	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -66,6 +66,7 @@ import (
 
 const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
+	durationRunTest                           = 120 * time.Second
 )
 
 const (
@@ -183,7 +184,7 @@ type TxnWithStatus struct {
 
 // WalletResponse
 type WalletResponse struct {
-	Ack uint64 `json:"num"`
+	Ack uint64 `json:"ack_num"`
 }
 
 // MakeFull sets up an Algorand full node
@@ -349,15 +350,17 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	/***** Scrooge Input *****/
 	go func() {
 		/**
 		* TODO to refine:
 		* - Don't send the same message more than once
 		* - actually update sequenceNumber like you do with ack_num
 		 */
-		// break_bool := true
+		path_to_algorand := "/tmp/scrooge-input"
+		sequenceNumber := 0
+		note_set := make(map[basics.MicroAlgos]struct{})
 
-		path_to_algorand := "/tmp/scrooge-input" // TODO: scrooge-input
 		err = ipc.CreatePipe(path_to_algorand)
 		node.log.Infof("THIS GO FUNC IS CALLED NOW")
 		if err != nil {
@@ -366,32 +369,39 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		node.log.Infof("Pipe created for input!")
 
 		rawData := make(chan []byte)
-		scroogeRequests := make(chan *scrooge.ScroogeRequest)
 		defer close(rawData)
-		defer close(scroogeRequests)
+		// scroogeRequests := make(chan *scrooge.ScroogeRequest)
+		// defer close(scroogeRequests)
 		err = ipc.OpenPipeWriter(path_to_algorand, rawData)
 		if err != nil {
-			node.log.Infof("THERE WAS AN ERROR!!!!!!: %v", err)
+			node.log.Infof("Unable to open pipe writer: %v", err)
 		}
+
 		start := time.Now()
-		for time.Since(start) < time.Second*100 {
+		for time.Since(start) < durationRunTest {
 			txns, err := node.GetPendingTxnsFromPool()
 			for len(txns) < 1 {
 				txns, err = node.GetPendingTxnsFromPool()
 			}
-			final_sequence_id := len(txns)
-			node.log.Infof("FINAL!!!!!! Sequence number: %v", final_sequence_id)
-			for sequenceNumber := 0; sequenceNumber < final_sequence_id; sequenceNumber++ { // TODO: update sequenceNumber
-				// txns[sequenceNumber]."Txn"["Note"]
+			txn_list_length := len(txns)
+			node.log.Infof("FINAL!!!!!! Sequence number: {}", txn_list_length)
+			for index := 0; index < txn_list_length; index += 1 {
+				/* Ensure no duplicate messages */
+				if _, exists := note_set[txns[index].Txn.Amount]; exists {
+					node.log.Infof("Duplicate note!")
+					continue
+				}
+
+				/* Create message request */
 				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Note, err)
 				request := &scrooge.ScroogeRequest{
 					Request: &scrooge.ScroogeRequest_SendMessageRequest{
 						SendMessageRequest: &scrooge.SendMessageRequest{
 							Content: &scrooge.CrossChainMessageData{
-								MessageContent: txns[sequenceNumber].Txn.Note,
+								MessageContent: txns[index].Txn.Note,
 								SequenceNumber: uint64(sequenceNumber),
 							},
-							ValidityProof: []byte("lol trust me on this one"),
+							ValidityProof: []byte("substitute valididty proof"),
 						},
 					},
 				}
@@ -399,29 +409,29 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 				if err == nil {
 					rawData <- requestBytes
 					node.log.Infof("Bytes sent over the ipc NEW!")
+					note_set[txns[index].Txn.Amount] = struct{}{}
 				}
-				// if count == final_sequence_id {
-				// 	break_bool = false
-				// 	break
-				// }
+				sequenceNumber += 1
 			}
-			node.log.Infof("DONE WITH THE FOR LOOP!!! Sequence number: %v", final_sequence_id)
-
+			node.log.Infof("Now sequence number is:  %v", sequenceNumber)
+			node.log.Infof("DONE WITH THE FOR LOOP!!! Sequence number: %v", txn_list_length)
 		}
 	}()
 
+	/***** Scrooge Output *****/
 	go func() { // This is the thread which sends Scrooge output back to the wallet
 		path_to_scrooge := "/tmp/scrooge-output"
-		output_sequence_length := 10
-		_ = output_sequence_length
 		var ack_count uint64 = 0
+
 		ipc.CreatePipe(path_to_scrooge)
 		node.log.Infof("Pipe created!")
+
 		rawData := make(chan []byte)
 		go ipc.OpenPipeReader(path_to_scrooge, rawData)
 		node.log.Infof("Pipe reader opened!")
+
 		start := time.Now()
-		for time.Since(start) < time.Second*100 { // TODO REMEMBER THIS!!! CHANGE IF WANT TO RUN FOR LONGER
+		for time.Since(start) < durationRunTest { // TODO REMEMBER THIS!!! CHANGE IF WANT TO RUN FOR LONGER
 			for data := range rawData {
 				node.log.Infof("WE ARE GETTING HERE!")
 				var scroogeTransfer scrooge.ScroogeTransfer
@@ -429,9 +439,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 				if err == nil {
 					if scroogeTransfer.GetCommitAcknowledgment() != nil {
 						node.log.Infof("Received acknowledgement!")
-						node.log.Infof("Ack count packet: {}", scroogeTransfer.GetCommitAcknowledgment().String())
+						node.log.Infof("Ack count packet: %v", scroogeTransfer.GetCommitAcknowledgment().String())
 						max_ack := scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber()
-						node.log.Infof("Ack count sequence_id: {}", scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber())
+						node.log.Infof("Ack count sequence_id: %v", scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber())
 						conn, err := net.Dial("tcp", "127.0.0.1:3456") // TODO Async dial, sleep/while
 						for ack_count <= max_ack {
 							if err != nil {
@@ -439,10 +449,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 							}
 							// defer conn.Close()
 							message := WalletResponse{Ack: ack_count}
-							encoder := gob.NewEncoder(conn)
-							err = encoder.Encode(message)
+							jsonData, err := json.Marshal(message)
 							if err != nil {
 								panic(err)
+							}
+							_, err = conn.Write([]byte(jsonData))
+							if err != nil {
+								node.log.Infof("Error sending message:", err)
+								return
 							}
 							ack_count += 1
 						}

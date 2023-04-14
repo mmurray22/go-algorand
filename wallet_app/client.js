@@ -1,4 +1,5 @@
 const algosdk = require("algosdk");
+const { setMaxIdleHTTPParsers } = require("http");
 //const MyAlgoConnect = require('@randlabs/myalgo-connect');
 var net = require('net');
 
@@ -74,69 +75,82 @@ async function algorand_communication() {
 
     /****** CLIENT COMMUNICATION CODE  ********/
     /* Server setup */
+    var last_tail = "";
+    var txns_in_flight = 0;
+    var txns_total = 0;
     var server = net.createServer((connection) => { 
 	    console.log('client connected');
 
       /* Executes when new data comes in */
 	    connection.on('data', function(data) {
         var txns = []
-        var json_arr = data.toString().trim().split('\n');
-        console.log("JSONs: ", json_arr)
-        for (var i = 0; i < json_arr.length; i++) {
+        var json_arr = data.toString().split('\n');
+        // console.log("JSONs: ", json_arr)
+        // console.log("Last tail: ", last_tail)
+        json_arr[0] = last_tail + json_arr[0]
+        // console.log("JSON Arr [0]: ", json_arr[0])
+        for (var i = 0; i < json_arr.length - 1; i++) {
           const response = JSON.parse(json_arr[i]);
           if (response.error) {
             console.log("Error: " + response.error.message);
-          } else {
-            console.log("Result: " + response);
-            if (response.sequence_id >= 0) {
-              // notes.push(response.value);
-              const buffer = new ArrayBuffer(8);
-              const uint8Array = new Uint8Array(buffer);
-              uint8Array[0] = counter
-              counter += 1
-              console.log(uint8Array)
-              const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-                suggestedParams: {
-                  ...params,
-                },
-                from: send_acct,
-                to: receive_acct,
-                amount: 100030 + counter,
-                note: uint8Array, // TODO: Update values so that you can filll this in!
-              });
-              /* Get accounts and send transaction */
-              const signedTxn = txn.signTxn(accounts[0].privateKey);
-              const txBytes = Buffer.from(signedTxn, 'base64')
-              txns.push(txBytes)
-              // console.log(notes); 
-            } else {
-              final_txn = true;
-              break;
-            }
+            break
           }
+          // console.log("Result: ",  response);
+          // notes.push(response.value);
+          counter += 1
+          // console.log(uint8Array)
+          // console.log("Sequence id: ", response.sequence_id)
+          const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+            suggestedParams: {
+              ...params,
+            },
+            from: send_acct,
+            to: receive_acct,
+            amount: 100000 + response.sequence_id,
+            note: Uint8Array.from(Array.from(response.value).map(letter => letter.charCodeAt(0))) //uint8Array, // TODO: Update values so that you can filll this in!
+          });
+          /* Get accounts and send transaction */
+          const signedTxn = txn.signTxn(accounts[0].privateKey);
+          const txBytes = Buffer.from(signedTxn, 'base64')
+          txns.push(txBytes)
+          // console.log("Counter: ", counter)
+          const myPromise = new Promise(async (resolve, reject) => {
+            try {
+              txns_in_flight += 1
+              const result = await algodClientNode1.sendRawTransaction(txBytes).do();
+              resolve(result);
+              txns_in_flight -= 1
+              txns_total += 1
+            } catch(err) {
+              txns_in_flight -= 1
+              console.log("Error: ", err)
+            } 
+          }).then(result => console.log("Values: ", result) /*result*/)
+          .catch(error => console.error("An error occurred: ", error.message));  
         }
-        Promise.all(new Array(txns.length).fill(0).map((_, i) => new Promise(async (resolve, reject) => {
-          try {
-            while (true) {
-              if (final_txn) {
-                const result = await algodClientNode1.sendRawTransaction(txns[i]).do();
-                resolve(result);
-                break;
-              }
-            }
-          } catch (error) {
-            reject(error);
-          }
-        }))).then((values) =>{
-          console.log("Values: ", values)
-          // const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
-          //   console.log('Connected to Client');
-          //   const response = '{"ack_count": 0}';
-          //   console.log("Response!");
-          //   clientSocket.write(response);
-          //   clientSocket.end();
-          // });
-        });
+        // console.log("EOF Last tail: ", last_tail)
+        last_tail = json_arr[json_arr.length - 1]
+        // console.log("New last tail: ", last_tail)
+        // if (txns.length < )
+        // while (txns_in_flight > 10) {
+        //   // stall
+        // }
+        // console.log("Number of txns: ", txns_in_flight)
+        // console.log("Txns total processed: ", txns_total)
+        // Promise.all(new Array(1).fill(0).map((_, i) => new Promise(async (resolve, reject) => {
+        //   try {
+        //     txns_in_flight += 1
+        //     const result = await algodClientNode1.sendRawTransaction(txns[i]).do();
+        //     resolve(result);
+        //     txns_in_flight -= 1
+        //     txns_total += 1
+        //   } catch (error) {
+        //     reject(error);
+        //     console.log("Transaction: ", txns[i].sequence_id)
+        //   }
+        // }))).then((values) =>{
+        //   console.log("Values: ", values)
+        // });
 	    });
 
       /* Reports when it detects the client has ended */
@@ -150,15 +164,17 @@ async function algorand_communication() {
     server.listen(walletPort, function() {
 	    console.log('server is listening!')
     });
+
+
     /* TODO Get response and forward on to the client interface */
     var algorandListener = net.createServer((connection) => {
       connection.on('data', function(data) {
         console.log("Received from algorand: ", data.toString());
         /* TODO: Get the ack from the data */
         const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
-          console.log('Connected to Client');
-          const response = '{"ack_count": 0}';
-          console.log("Response!");
+          // console.log('Connected to Client');
+          const response = '{"ack_count": 1}';
+          // console.log("Response!");
           clientSocket.write(response);
           clientSocket.end();
         });
@@ -169,6 +185,9 @@ async function algorand_communication() {
     });
     algorandListener.listen(algorandPort, function() {
 	    console.log('Algorand listener is listening!')
+    });
+    algorandListener.on('end', async function() {
+      console.log('Algorand disconnected');    
     });
 
 }
