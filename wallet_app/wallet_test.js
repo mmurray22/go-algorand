@@ -1,7 +1,4 @@
 const algosdk = require("algosdk");
-const { setMaxIdleHTTPParsers } = require("http");
-//const MyAlgoConnect = require('@randlabs/myalgo-connect');
-var net = require('net');
 
 async function getLocalAccounts(server, port, kmd_token) {
   const kmdClient = new algosdk.Kmd(kmd_token, server, port);
@@ -13,7 +10,7 @@ async function getLocalAccounts(server, port, kmd_token) {
   let walletId;
   // eslint-disable-next-line no-restricted-syntax
   for (const wallet of wallets.wallets) {
-    if (wallet.name === 'test_wallet') walletId = wallet.id;
+    if (wallet.name === 'test1') walletId = wallet.id;
   }
 
   if (walletId === undefined)
@@ -50,60 +47,31 @@ async function getLocalAccounts(server, port, kmd_token) {
 
 async function algorand_communication() {
     /* Constants necessary to establish connection to the Algorand network/KMD instance */
-    const api_token1 = '07a57868eb6a51df4c9bfc2bb2c24093e396f308388e204dda157a3cfa2e6458';
-    const kmd_token1 = '180ba7110339b8f21e3324fb74f430930217d13ab9f6f1f128f484d5a5c64b7b';
-    const send_acct = 'GEOVLD7STUY5BS2ORLLG5G4IYRN7Y6T2NLDPH2UGD4O4Q26MKAV2ANMLWU'; // Node 1 account
-    const receive_acct = 'FUFE2QZC2JDSNS5HX3AQXHOVU5LFKV4HYVCULVZMSLDXFRP7Q76L4OUKM4'; // Node 2 account
+    const api_token1 = '29c99a9a60573ac564b04e0a2024bc3669c9bc6c34b8e9383f0aa36ce070e604';
+    const kmd_token1 = 'fe489b2aebea68ad37cd1a82ba62ee130e8ec08cfba6e54528d72b7b7440c917';
+    const send_acct = 'LZ3DICGKHVYFDOBWZOEDK5LLQXMASVFQZWFVS5XPNLH3K7EXZN32OFSOOY'; // Node 1 account
+    const receive_acct = 'YZPHSOF5UKPGLKEIKV4OMPVRFG24OGSEKM5SBCFW7UU43W5XGZICHPF66Y'; // Node 2 account
     const serverUrl = 'http://127.0.0.1'
-    const server1 = '127.0.0.1';
     const algoPort1 = 8080;
-    const kmdPort1 = 7833;
-    const walletPort = parseInt(process.argv[2]);//1234;
-    const clientPort = parseInt(process.argv[3]);//4003; 
-    const algorandPort = parseInt(process.argv[4]);//3456;
-    const clientServer = process.argv[5]; //'128.110.218.141';
+    const kmdPort1 = 44317;
     notes = []
     final_txn = false
     counter = 0
     const algodClientNode1 = new algosdk.Algodv2(api_token1, serverUrl, algoPort1);
-    //const myAlgoConnect = new MyAlgoConnect();
     const params = await algodClientNode1.getTransactionParams().do();
     const accounts = await getLocalAccounts(serverUrl, kmdPort1, kmd_token1);
     console.log('Accounts: ', accounts);
     console.log('Done with setup!')
 
 
-    /****** CLIENT COMMUNICATION CODE  ********/
-
-    var algorandListener = net.createServer((connection) => {
-      connection.on('data', function(data) {
-        console.log("Received from algorand: ", data.toString());
-        /* TODO: Get the ack from the data */
-        const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
-          console.log('Connected to Client');
-          const response = '{"ack_count": 0}';
-          console.log("Response!");
-          clientSocket.write(response);
-          clientSocket.end();
-        });
-      });
-    });
-    algorandListener.on('listening', () => {
-      console.log('Algorand listener is listening on a port')
-    });
-    algorandListener.listen(algorandPort, function() {
-	    console.log('Algorand listener is listening!')
-    });
-
-
     /* Server setup */
     var txns_in_flight = 0;
     var txns_total = 0;
 	  console.log('client connected');
-    var txns = []
+    var promise_list = []
     const start = new Date().getTime();
     /* Executes when new data comes in */
-    while (new Date().getTime() - start < 1000) { //10 seconds
+    while (true) { //10 seconds
 
       /* Create transaction */
       const buffer = new ArrayBuffer(1);
@@ -117,52 +85,48 @@ async function algorand_communication() {
         },
         from: send_acct,
         to: receive_acct,
-        amount: 100000 + counter,
+        amount: 100030 + counter,
         note: uint8Array,
       });
       const signedTxn = txn.signTxn(accounts[0].privateKey);
       const txBytes = Buffer.from(signedTxn, 'base64')
-      
-      console.log("Counter: ", counter)
-      console.log("Number of txns: ", txns_in_flight)
+      held_tx = 0
+      while (promise_list.length >= 5000) {
+        await promise_list.shift();
+      }
       const myPromise = new Promise(async (resolve, reject) => {
         try {
+
           txns_in_flight += 1
-          console.log("In the promise number of txns: ", txns_in_flight)
-          const result = await algodClientNode1.sendRawTransaction(txBytes).do();
-          // resolve(result);
+          // console.log("In the promise number of txns: ", txns_in_flight)
+          const {txId} = await algodClientNode1.sendRawTransaction(txBytes).do();
+          held_tx = txId
+          // console.log("Txn id: ", txId)
+          const pendingTxns = await algodClientNode1.pendingTransactionsInformation().do();
+          // for (var i = 0; i < pendingTxns['top-transactions'].length; i++) {
+          //   console.log(pendingTxns['top-transactions'][i])
+          // }
+          // console.log("Pending trans: ", algodClientNode1.pendingTransactionInformation(txId));
+          const result = await algosdk.waitForConfirmation(algodClientNode1, txId, 4);
+          
+          // console.log(result);
+          // console.log(`Transaction Information: ${result.txn}`);
+          // console.log(`Decoded Note: ${Buffer.from(result.txn.txn.note).toString()}`);
+          resolve(result)
           txns_in_flight -= 1
           txns_total += 1
-          console.log("Result: ", result)
+          // console.log("Result: ", result)
           console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
+          console.log("Txns/sec: ", txns_total/(new Date().getTime() - start))
         } catch (error) {
+          console.log(algodClientNode1.pendingTransactionInformation(held_tx));
           reject(error);
-          // console.log("Transaction: ", error)
         }
       });
       myPromise
-      .then(result => console.log(`The result is ${result}`))
+      .then(result => console.log("") /*console.log(`The result is ${result}`)*/)
       .catch(error => console.error(`An error occurred: ${error.message}`));
-      // Promise.all(new Array(txns.length).fill(0).map((_, i) => new Promise(async (resolve, reject) => {
-      //   try {
-      //     txns_in_flight += 1
-      //     console.log("In the promise number of txns: ", txns_in_flight)
-      //     const result = await algodClientNode1.sendRawTransaction(txns[i]).do();
-      //     resolve(result);
-      //     txns_in_flight -= 1
-      //     txns_total += 1
-      //   } catch (error) {
-      //     reject(error);
-      //     // console.log("Transaction: ", txns[i])
-      //   }
-      // }))).then((values) =>{
-      //   console.log("Values: ", values)
-      // });
+      promise_list.push(myPromise)
     }
-    
-
-    /* TODO Get response and forward on to the client interface */
-    
-
 }
 algorand_communication();

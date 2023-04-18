@@ -86,13 +86,13 @@ async function algorand_communication() {
     connection.on('data', async function (data) {
       var txns = []
       var json_arr = data.toString().split('\n');
-      console.log("JSON first: ", json_arr[0])
-      console.log("JSON last: ", json_arr[json_arr.length - 1])
-      console.log("Last tail BEGINNING: ", last_tail)
+      // console.log("JSON first: ", json_arr[0])
+      // console.log("JSON last: ", json_arr[json_arr.length - 1])
+      // console.log("Last tail BEGINNING: ", last_tail)
       json_arr[0] = last_tail + json_arr[0]
-      console.log("NEW JSON Arr [0]: ", json_arr[0])
+      // console.log("NEW JSON Arr [0]: ", json_arr[0])
       last_tail = json_arr[json_arr.length - 1]
-      console.log("New last tail: ", last_tail)
+      // console.log("New last tail: ", last_tail)
       for (var i = 0; i < json_arr.length - 1; i++) {
         const response = JSON.parse(json_arr[i]);
         if (response.error) {
@@ -178,10 +178,10 @@ async function algorand_communication() {
       /* TODO: Get the ack from the data */
       const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
         // console.log('Connected to Client');
-        const response = '{"ack_count": 1}';
+        const response = '{"ack_count": ' + data.toString() + '}';
         // console.log("Response!");
         clientSocket.write(response);
-        clientSocket.end();
+        // clientSocket.end();
       });
     });
   });
