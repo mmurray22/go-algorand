@@ -29,9 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/ipc-pkg"
-	"github.com/algorand/go-algorand/scrooge"
-
 	// "github.com/mmurray22/ipc-pkg"
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
@@ -46,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ipc-pkg"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -55,6 +53,7 @@ import (
 	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/scrooge"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -191,6 +190,7 @@ type WalletResponse struct {
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
+
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
@@ -198,6 +198,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.devMode = genesis.DevMode
 	node.config = cfg
 
+	node.log.Infof("Algorand Node being created!")
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
 	if err != nil {
@@ -350,14 +351,10 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
-
+	node.log.Infof("About to setup Scrooge!")
 	/***** Scrooge Input *****/
 	go func() {
-		/**
-		* TODO to refine:
-		* - Don't send the same message more than once
-		* - actually update sequenceNumber like you do with ack_num
-		 */
+		node.log.Infof("Scrooge input function!")
 		path_to_algorand := "/tmp/scrooge-input"
 		sequenceNumber := 0
 		note_set := make(map[basics.MicroAlgos]struct{})
@@ -371,35 +368,56 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 		rawData := make(chan []byte)
 		defer close(rawData)
-		// scroogeRequests := make(chan *scrooge.ScroogeRequest)
-		// defer close(scroogeRequests)
 		err = ipc.OpenPipeWriter(path_to_algorand, rawData)
 		if err != nil {
 			node.log.Infof("Unable to open pipe writer: %v", err)
 		}
 
 		start := time.Now()
+		startRnd := basics.Round(2300)
+		endRnd := basics.Round(2400)
 		for time.Since(start) < durationRunTest {
-			txns, err := node.GetPendingTxnsFromPool()
-			for len(txns) < 1 {
-				txns, err = node.GetPendingTxnsFromPool()
+			node.log.Infof("Started sending go func!")
+			sampleAddress, err := basics.UnmarshalChecksumAddress("2YHTIJK3HU3CYLENQEEW7ZLPTOLVMDIHKTSVAO3P72GVEISVDCEHQB3PJ4") // TODO
+			if err != nil {
+				node.log.Errorf("Error SAMPLE ADDRESS: {}", err)
+				break
 			}
+			node.log.Infof("Sample address: {}", sampleAddress)
+			txns, err := node.ListTxnsScrooge(sampleAddress, startRnd, endRnd)
+			for len(txns) < 1 {
+				if err != nil {
+					startRnd += 100
+					endRnd += 100
+				} else {
+					startRnd += 1000
+					endRnd += 1000
+				}
+
+				txns, err = node.ListTxnsScrooge(sampleAddress, startRnd, endRnd)
+			}
+			node.log.Infof("Commit transactions SUCCEED! between rounds start {} and end {}", startRnd, endRnd)
+			// for i := range txns {
+			// 	node.log.Infof("COMMITTED: {}", txns[i].Txn.Txn.Note)
+			// }
+			startRnd += 1000
+			endRnd += 1000
 			txn_list_length := len(txns)
 			node.log.Infof("FINAL!!!!!! Sequence number: {}", txn_list_length)
 			for index := 0; index < txn_list_length; index += 1 {
-				/* Ensure no duplicate messages */
-				if _, exists := note_set[txns[index].Txn.Amount]; exists {
+				// Ensure no duplicate messages
+				if _, exists := note_set[txns[index].Txn.Txn.Amount]; exists {
 					node.log.Infof("Duplicate note!")
 					continue
 				}
 
-				/* Create message request */
-				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Note, err)
+				// Create message request
+				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Txn.Note, err)
 				request := &scrooge.ScroogeRequest{
 					Request: &scrooge.ScroogeRequest_SendMessageRequest{
 						SendMessageRequest: &scrooge.SendMessageRequest{
 							Content: &scrooge.CrossChainMessageData{
-								MessageContent: txns[index].Txn.Note,
+								MessageContent: txns[index].Txn.Txn.Note,
 								SequenceNumber: uint64(sequenceNumber),
 							},
 							ValidityProof: []byte("substitute valididty proof"),
@@ -410,7 +428,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 				if err == nil {
 					rawData <- requestBytes
 					node.log.Infof("Bytes sent over the ipc NEW!")
-					note_set[txns[index].Txn.Amount] = struct{}{}
+					note_set[txns[index].Txn.Txn.Amount] = struct{}{}
 				}
 				sequenceNumber += 1
 			}
@@ -421,6 +439,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	/***** Scrooge Output *****/
 	go func() { // This is the thread which sends Scrooge output back to the wallet
+		node.log.Infof("Scrooge Ouput function!")
 		path_to_scrooge := "/tmp/scrooge-output"
 		var ack_count uint64 = 0
 
@@ -707,6 +726,27 @@ func (node *AlgorandFullNode) ListTxns(addr basics.Address, minRound basics.Roun
 		h, err := node.ledger.AddressTxns(addr, r)
 		if err != nil {
 			return nil, err
+		}
+		for _, tx := range h {
+			result = append(result, TxnWithStatus{
+				Txn:            tx.SignedTxn,
+				ConfirmedRound: r,
+				ApplyData:      tx.ApplyData,
+			})
+		}
+	}
+	return result, nil
+}
+
+// // ListTxns Copy returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
+// // TxnWithStatus returns the round in which a particular transaction appeared,
+// // since that information is not part of the SignedTxn itself.
+func (node *AlgorandFullNode) ListTxnsScrooge(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error) {
+	result := make([]TxnWithStatus, 0)
+	for r := minRound; r <= maxRound; r++ {
+		h, err := node.ledger.AddressTxns(addr, r)
+		if err != nil {
+			return result, err
 		}
 		for _, tx := range h {
 			result = append(result, TxnWithStatus{

@@ -558,7 +558,7 @@ var MaxBytesKeyValueLen int
 var MaxExtraAppProgramLen int
 
 // MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
-//supported supported by any of the consensus protocols. used for decoding purposes.
+// supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
 // MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
@@ -724,8 +724,8 @@ func initConsensusProtocols() {
 		MinBalance:          10000,
 		MinTxnFee:           1000,
 		MaxTxnLife:          1000,
-		MaxTxnNoteBytes:     100000000,//1024,
-		MaxTxnBytesPerBlock: 100998976,//1000000,
+		MaxTxnNoteBytes:     1024,
+		MaxTxnBytesPerBlock: 1000000,
 		DefaultKeyDilution:  10000,
 
 		MaxTimestampIncrement: 25,

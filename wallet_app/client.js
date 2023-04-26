@@ -53,18 +53,17 @@ var txns_total = 0;
 var promise_list = [];
 async function algorand_communication() {
   /* Constants necessary to establish connection to the Algorand network/KMD instance */
-  const api_token1 = '07a57868eb6a51df4c9bfc2bb2c24093e396f308388e204dda157a3cfa2e6458';
-  const kmd_token1 = '180ba7110339b8f21e3324fb74f430930217d13ab9f6f1f128f484d5a5c64b7b';
-  const send_acct = 'GEOVLD7STUY5BS2ORLLG5G4IYRN7Y6T2NLDPH2UGD4O4Q26MKAV2ANMLWU'; // Node 1 account
-  const receive_acct = 'FUFE2QZC2JDSNS5HX3AQXHOVU5LFKV4HYVCULVZMSLDXFRP7Q76L4OUKM4'; // Node 2 account
-  const serverUrl = 'http://127.0.0.1'
-  const server1 = '127.0.0.1';
-  const algoPort1 = 8080;
-  const kmdPort1 = 7833;
-  const walletPort = parseInt(process.argv[2]);//1234;
-  const clientPort = parseInt(process.argv[3]);//4003; 
-  const algorandPort = parseInt(process.argv[4]);//3456;
-  const clientServer = process.argv[5]; //'128.110.218.141';
+  const api_token1 = parsed_data.api_token //'29c99a9a60573ac564b04e0a2024bc3669c9bc6c34b8e9383f0aa36ce070e604';
+  const kmd_token1 = parsed_data.kmd_token //'fe489b2aebea68ad37cd1a82ba62ee130e8ec08cfba6e54528d72b7b7440c917';
+  const send_acct = parsed_data.send_acct // 'LZ3DICGKHVYFDOBWZOEDK5LLQXMASVFQZWFVS5XPNLH3K7EXZN32OFSOOY'; // Node 1 account
+  const receive_acct = parsed_data.receive_acct //'YZPHSOF5UKPGLKEIKV4OMPVRFG24OGSEKM5SBCFW7UU43W5XGZICHPF66Y'; // Node 2 account
+  const serverUrl = parsed_data.server_url //'http://127.0.0.1'
+  const algoPort1 = parsed_data.algo_port //8080;
+  const kmdPort1 = parsed_data.kmd_port //44317; //38897
+  const walletPort = parsed_data.wallet_port;//1234;
+  const clientPort = parsed_data.client_port;//4003; 
+  const algorandPort = parsed_data.algorand_port;//3456;
+  const clientIP = parsed_data.client_ip; //'128.110.218.141';
   notes = []
   final_txn = false
   counter = 0
@@ -176,7 +175,7 @@ async function algorand_communication() {
     connection.on('data', function (data) {
       console.log("Received from algorand: ", data.toString());
       /* TODO: Get the ack from the data */
-      const clientSocket = net.createConnection({ host: clientServer, port: clientPort }, () => {
+      const clientSocket = net.createConnection({ host: clientIP, port: clientPort }, () => {
         // console.log('Connected to Client');
         const response = '{"ack_count": ' + data.toString() + '}';
         // console.log("Response!");
