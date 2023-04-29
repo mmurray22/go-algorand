@@ -65,7 +65,7 @@ import (
 
 const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
-	durationRunTest                           = 120 * time.Second
+	durationRunTest                           = 420 * time.Second
 )
 
 const (
@@ -352,20 +352,18 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 	node.log.Infof("About to setup Scrooge!")
+
 	/***** Scrooge Input *****/
 	go func() {
-		node.log.Infof("Scrooge input function!")
-		path_to_algorand := "/tmp/scrooge-input"
-		sequenceNumber := 0
-		note_set := make(map[basics.MicroAlgos]struct{})
+		node.log.Infof("Started sending go func!")
 
+		// Create Pipe and channel here
+		path_to_algorand := "/tmp/scrooge-input"
 		err = ipc.CreatePipe(path_to_algorand)
-		node.log.Infof("THIS GO FUNC IS CALLED NOW")
 		if err != nil {
 			node.log.Infof("UNABLE TO CREATE PIPE: %v", err)
 		}
 		node.log.Infof("Pipe created for input!")
-
 		rawData := make(chan []byte)
 		defer close(rawData)
 		err = ipc.OpenPipeWriter(path_to_algorand, rawData)
@@ -373,67 +371,79 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 			node.log.Infof("Unable to open pipe writer: %v", err)
 		}
 
+		// Set some basic metrics here
 		start := time.Now()
-		startRnd := basics.Round(2300)
-		endRnd := basics.Round(2400)
-		for time.Since(start) < durationRunTest {
-			node.log.Infof("Started sending go func!")
-			sampleAddress, err := basics.UnmarshalChecksumAddress("2YHTIJK3HU3CYLENQEEW7ZLPTOLVMDIHKTSVAO3P72GVEISVDCEHQB3PJ4") // TODO
-			if err != nil {
-				node.log.Errorf("Error SAMPLE ADDRESS: {}", err)
-				break
-			}
-			node.log.Infof("Sample address: {}", sampleAddress)
-			txns, err := node.ListTxnsScrooge(sampleAddress, startRnd, endRnd)
-			for len(txns) < 1 {
-				if err != nil {
-					startRnd += 100
-					endRnd += 100
-				} else {
-					startRnd += 1000
-					endRnd += 1000
-				}
+		startRnd := node.ledger.Latest()
+		var currentRnd basics.Round
+		sequenceNumber := 0
+		note_set := make(map[basics.MicroAlgos]struct{})
 
-				txns, err = node.ListTxnsScrooge(sampleAddress, startRnd, endRnd)
+		for time.Since(start) < durationRunTest {
+			txn_list_length := 0
+			var txns []transactions.SignedTxn
+			currentRnd = node.ledger.Latest()
+			for txn_list_length < 1 {
+				if currentRnd > startRnd {
+					block, err := node.ledger.Block(currentRnd)
+					_ = block
+					if err != nil {
+						node.log.Errorf("Unable to get latest block: %v", err)
+					}
+					metadata_and_txns, err := block.DecodePaysetFlat()
+					if err != nil {
+						node.log.Errorf("Unable to get block transactions: %v", err)
+					}
+					txns = make([]transactions.SignedTxn, len(metadata_and_txns))
+					for i := range metadata_and_txns {
+						txns[i] = metadata_and_txns[i].SignedTxn
+					}
+					txn_list_length = len(txns)
+					node.log.Infof("Transactions have been detected! Number: {}", txn_list_length)
+					node.log.Infof("SUCCEED: Found transactions between rounds start {} and end {}", startRnd, currentRnd)
+					startRnd = currentRnd
+					continue
+				}
+				time.Sleep(1 * time.Millisecond)
+				currentRnd = node.ledger.Latest()
 			}
-			node.log.Infof("Commit transactions SUCCEED! between rounds start {} and end {}", startRnd, endRnd)
-			// for i := range txns {
-			// 	node.log.Infof("COMMITTED: {}", txns[i].Txn.Txn.Note)
-			// }
-			startRnd += 1000
-			endRnd += 1000
-			txn_list_length := len(txns)
-			node.log.Infof("FINAL!!!!!! Sequence number: {}", txn_list_length)
+			node.log.Infof("FINAL!!!!!! Transactions list length: {} and Initial Sequence No. %v", txn_list_length, sequenceNumber)
 			for index := 0; index < txn_list_length; index += 1 {
 				// Ensure no duplicate messages
-				if _, exists := note_set[txns[index].Txn.Txn.Amount]; exists {
+				if _, exists := note_set[txns[index].Txn.Amount]; exists {
 					node.log.Infof("Duplicate note!")
 					continue
 				}
 
 				// Create message request
-				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Txn.Note, err)
+				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Note, err)
+				filename := "/proj/ove-PG0/murray/payload/100_byte_payload.txt" //string(txns[0].Txn.Note)
+				payload, err := os.ReadFile(filename)
+				if err != nil {
+					node.log.Errorf("UNABLE TO READ FILE {}", err)
+					continue
+				}
+				node.log.Infof("Payload about to be loaded!")
 				request := &scrooge.ScroogeRequest{
 					Request: &scrooge.ScroogeRequest_SendMessageRequest{
 						SendMessageRequest: &scrooge.SendMessageRequest{
 							Content: &scrooge.CrossChainMessageData{
-								MessageContent: txns[index].Txn.Txn.Note,
+								MessageContent: payload, //txns[0].Txn.Note,
 								SequenceNumber: uint64(sequenceNumber),
 							},
 							ValidityProof: []byte("substitute valididty proof"),
 						},
 					},
 				}
+				node.log.Infof("Payload successfully loaded! It is size: %v", len(payload))
 				requestBytes, err := proto.Marshal(request)
 				if err == nil {
 					rawData <- requestBytes
 					node.log.Infof("Bytes sent over the ipc NEW!")
-					note_set[txns[index].Txn.Txn.Amount] = struct{}{}
+					note_set[txns[index].Txn.Amount] = struct{}{}
 				}
 				sequenceNumber += 1
 			}
-			node.log.Infof("Now sequence number is:  %v", sequenceNumber)
-			node.log.Infof("DONE WITH THE FOR LOOP!!! Sequence number: %v", txn_list_length)
+			node.log.Infof("DONE WITH THE FOR LOOP!!! Final SEQUENCE number is:  %v", sequenceNumber)
 		}
 	}()
 
@@ -451,6 +461,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		node.log.Infof("Pipe reader opened!")
 
 		start := time.Now()
+		node.log.Infof("START TIME: %v", start)
 		for time.Since(start) < durationRunTest { // TODO REMEMBER THIS!!! CHANGE IF WANT TO RUN FOR LONGER
 			for data := range rawData {
 				node.log.Infof("WE ARE GETTING HERE!")
@@ -463,14 +474,20 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 						max_ack := scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber()
 						node.log.Infof("Ack count sequence_id: %v", scroogeTransfer.GetCommitAcknowledgment().GetSequenceNumber())
 						conn, err := net.Dial("tcp", "127.0.0.1:3456") // TODO Async dial, sleep/while
+						if err != nil {
+							node.log.Infof("UNABLE TO CONNECT TO TCP")
+						}
+						node.log.Infof("TCP successfully connected!")
 						for ack_count <= max_ack {
 							if err != nil {
+								node.log.Infof("ERROR 1")
 								panic(err)
 							}
 							// defer conn.Close()
 							message := WalletResponse{Ack: ack_count}
 							jsonData, err := json.Marshal(message)
 							if err != nil {
+								node.log.Infof("ERROR 2")
 								panic(err)
 							}
 							_, err = conn.Write([]byte(jsonData))
@@ -493,6 +510,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 				}
 			}
 		}
+		node.log.Infof("FINISH DURATION: %v", time.Since(start))
+		final := time.Now()
+		node.log.Infof("FINISH TIME: %v", final)
 	}()
 	return node, err
 }

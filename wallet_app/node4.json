@@ -1,0 +1,13 @@
+{
+    "api_token": "88a039d34882c2e0a5ee94caa08ad87c8a66baf11f880e5a28492f1d595b6ae8",
+    "kmd_token": "11b3e05502df27bbbbb44f83b60b0bb2ffe697a58752d269d855241c42d644b4",
+    "send_acct": "PSDHZUCMK6LORMHO7L3FM37BSVG2Z23ANKR3U2BEQ56E2ZFMOWFPNQTMSM",
+    "receive_acct": "Z6D3SQNT2RSMIZ5ZUT53ES4NKQAX3PWQSXBKFL7ZDJUGGXD43K3N4UAJJU", 
+    "server_url": "http://127.0.0.1",
+    "algo_port": 8080,
+    "kmd_port": 7833,
+    "wallet_port": 1234,
+    "client_port": 4003,
+    "algorand_port": 3456,
+    "client_ip": "128.110.218.203"
+}
