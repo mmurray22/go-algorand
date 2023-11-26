@@ -51,54 +51,6 @@ async function getLocalAccounts(server, port, kmd_token) {
 
 time_in_confirmation = []
 first_start = -1
-// async function testWaitForConfirmation(client, txid, waitRounds) {
-//   local_start = new Date().getTime();
-//   // Wait until the transaction is confirmed or rejected, or until 'waitRounds'
-//   // number of rounds have passed.
-//   const status = await client.status().do();
-//   if (typeof status === 'undefined') {
-//       throw new Error('Unable to get node status');
-//   }
-//   const startRound = status['last-round'];
-//   if (first_start < 0) {
-//     console.log("Start Round: ", startRound)
-//     first_start = startRound
-//   }
-//   let currentRound = startRound;
-//   /* eslint-disable no-await-in-loop */
-//   while (currentRound < startRound + waitRounds) {
-//       let poolError = false;
-//       try {
-//           const pendingInfo = await client.pendingTransactionInformation(txid).do();
-//           if (pendingInfo['confirmed-round']) {
-//               // Got the completed Transaction
-//               time_in_confirmation.push((new Date().getTime() - local_start))
-//               // console.log("Final round: ", pendingInfo['confirmed-round'])
-//               return pendingInfo;
-//           }
-//           if (pendingInfo['pool-error']) {
-//               // If there was a pool error, then the transaction has been rejected
-//               poolError = true;
-//               throw new Error(`Transaction Rejected: ${pendingInfo['pool-error']}`);
-//           }
-//       }
-//       catch (err) {
-//           // Ignore errors from PendingTransactionInformation, since it may return 404 if the algod
-//           // instance is behind a load balancer and the request goes to a different algod than the
-//           // one we submitted the transaction to
-//           if (poolError) {
-//               // Rethrow error only if it's because the transaction was rejected
-//               throw err;
-//           }
-//       }
-//       // mini = new Date().getTime();
-//       await client.statusAfterBlock(currentRound).do();
-//       // console.log("Mini bench of getting status: ", new Date().getTime() - mini)
-//       currentRound += 1;
-//   }
-//   /* eslint-enable no-await-in-loop */
-//   throw new Error(`Transaction not confirmed after ${waitRounds} rounds`);
-// }
 
 async function algorand_communication() {
     data = fs.readFileSync(process.argv[2]);
@@ -107,7 +59,7 @@ async function algorand_communication() {
     /* Constants necessary to establish connection to the Algorand network/KMD instance */
     const api_token1 = parsed_data.api_token //'29c99a9a60573ac564b04e0a2024bc3669c9bc6c34b8e9383f0aa36ce070e604';
     const kmd_token1 = parsed_data.kmd_token //'fe489b2aebea68ad37cd1a82ba62ee130e8ec08cfba6e54528d72b7b7440c917';
-    const send_acct = parsed_data.send_acct // 'LZ3DICGKHVYFDOBWZOEDK5LLQXMASVFQZWFVS5XPNLH3K7EXZN32OFSOOY'; // Node 1 account
+    const send_acct = parsed_data.my_acct // 'LZ3DICGKHVYFDOBWZOEDK5LLQXMASVFQZWFVS5XPNLH3K7EXZN32OFSOOY'; // Node 1 account
     const receive_acct = parsed_data.receive_acct //'YZPHSOF5UKPGLKEIKV4OMPVRFG24OGSEKM5SBCFW7UU43W5XGZICHPF66Y'; // Node 2 account
     const serverUrl = parsed_data.server_url //'http://127.0.0.1'
     const algoPort1 = parsed_data.algo_port //8080;
@@ -120,9 +72,6 @@ async function algorand_communication() {
     final_txn = false
     counter = 0
     const algodClientNode1 = new algosdk.Algodv2(api_token1, serverUrl, algoPort1);
-    // var params = await algodClientNode1.getTransactionParams().do();
-    // params.fee = 100000
-    // console.log("Fee: ", params.fee)
     const accounts = await getLocalAccounts(serverUrl, kmdPort1, kmd_token1);
     console.log('Accounts: ', accounts);
     console.log('Done with setup!')
@@ -194,8 +143,9 @@ async function algorand_communication() {
       const myPromise = new Promise(async (resolve, reject) => {
         try {
           txns_in_flight += 1
-          // console.log("In the promise number of txns: ", txns_in_flight)
+          //console.log("In the promise number of txns: ", txns_in_flight)
           const {txId} = await algodClientNode1.sendRawTransaction(txBytes).do();
+          //console.log("Getting here???");
           txns_sent += 1
           // console.log("~~~~~~~~~Txns SENT total~~~~~~~~~~~~~~~~: ", txns_sent)
           // console.log("Txns sent/sec: ", 1000*txns_sent/(new Date().getTime() - start))
@@ -204,8 +154,8 @@ async function algorand_communication() {
           txns_in_flight -= 1
           // const result = await testWaitForConfirmation(algodClientNode1, txId, 4);
           txns_total += 1
-          // console.log("Result: ", result)
-          // console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
+          //console.log("Result: ", result)
+          console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
           // console.log("Txns/sec: ", 1000*txns_total/(new Date().getTime() - start))
           // console.log("Number of txn bytes: ", Buffer.byteLength(txBytes))
           // console.log("Txns sent sec: ", (new Date().getTime() - start))
@@ -227,20 +177,21 @@ async function algorand_communication() {
           // }
           resolve(txId)
         } catch (error) {
-          // console.log("ERROR IN TRANSACTION: ", error/*algodClientNode1.pendingTransactionInformation(held_tx)*/);
+          console.log("ERROR IN TRANSACTION: ", error/*algodClientNode1.pendingTransactionInformation(held_tx)*/);
           // reject(error);
           txns_in_flight -= 1
         }
       });
       myPromise
-      .then(result => {}) ///*console.log(`The result is ${result}`)*/
-      .catch(error => {}/*error(`An error occurred: ${error.message}`)*/);
+      .then(result => console.log(`The result is ${result}`))
+      .catch(error => error(`An error occurred: ${error.message}`));
       promise_list.push(myPromise)
     }
     final_time = new Date().getTime() - start
     console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
     console.log("Txns/sec: ", 1000*txns_total/(new Date().getTime() - start))
     console.log("Time spent in confirmation: ", time_in_confirmation.reduce((partialSum, a) => partialSum + a, 0))
+    console.log("Txns in flight: ", txns_in_flight);
     var status = await algodClientNode1.status().do();
     if (typeof status === 'undefined') {
         throw new Error('Unable to get node status');
