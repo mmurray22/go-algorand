@@ -454,7 +454,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		var ack_count uint64 = 0
 
 		ipc.CreatePipe(path_to_scrooge)
-		node.log.Infof("Pipe created!")
+		node.log.Infof("Reader Pipe created! This is /scrooge/output")
 
 		rawData := make(chan []byte)
 		go ipc.OpenPipeReader(path_to_scrooge, rawData)

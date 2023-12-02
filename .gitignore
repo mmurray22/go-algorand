@@ -71,3 +71,5 @@ testresults.json
 
 # Wallet app
 wallet_app/node_modules/*
+wallet_app/package-lock.json
+wallet_app/package.json

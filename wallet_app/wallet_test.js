@@ -118,7 +118,7 @@ async function algorand_communication() {
     start = new Date().getTime();
     console.log('Start time: ', start);
     // 2048: MAXIMUM number of requests at any one time
-    while (new Date().getTime() - start < 120000) { 
+    while (new Date().getTime() - start < 200000) { 
       uint8Array[0] = counter
       counter += 1
       var params = await algodClientNode1.getTransactionParams().do();
