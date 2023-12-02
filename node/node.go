@@ -416,7 +416,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 				// Create message request
 				node.log.Infof("INSIDE FOR LOOP THE Length of transactions: %v, %v and any errors? %v", len(txns), txns[0].Txn.Note, err)
-				filename := "/proj/ove-PG0/murray/payload/100_byte_payload.txt" //string(txns[0].Txn.Note)
+				filename := "/home/scrooge/100_byte_payload.txt" //string(txns[0].Txn.Note)
 				payload, err := os.ReadFile(filename)
 				if err != nil {
 					node.log.Errorf("UNABLE TO READ FILE {}", err)
