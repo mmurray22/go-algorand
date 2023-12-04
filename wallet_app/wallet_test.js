@@ -71,6 +71,7 @@ async function algorand_communication() {
     notes = []
     final_txn = false
     counter = 0
+    const durationToRun = 900000
     const algodClientNode1 = new algosdk.Algodv2(api_token1, serverUrl, algoPort1);
     const accounts = await getLocalAccounts(serverUrl, kmdPort1, kmd_token1);
     console.log('Accounts: ', accounts);
@@ -118,7 +119,7 @@ async function algorand_communication() {
     start = new Date().getTime();
     console.log('Start time: ', start);
     // 2048: MAXIMUM number of requests at any one time
-    while (new Date().getTime() - start < 200000) { 
+    while (new Date().getTime() - start < durationToRun) { 
       uint8Array[0] = counter
       counter += 1
       var params = await algodClientNode1.getTransactionParams().do();
@@ -134,10 +135,10 @@ async function algorand_communication() {
       });
       const signedTxn = txn.signTxn(accounts[0].privateKey);
       const txBytes = Buffer.from(signedTxn, 'base64')
-      while (txns_in_flight >= 1000 && new Date().getTime() - start < 120000) { // Use at maximum a 700 here to account for the maximum size of the transaction
+      while (txns_in_flight >= 1000 && new Date().getTime() - start < durationToRun) { // Use at maximum a 700 here to account for the maximum size of the transaction
         await promise_list.shift();
       }
-      if (new Date().getTime() - start >= 120000) {
+      if (new Date().getTime() - start >= durationToRun) {
         break;
       }
       const myPromise = new Promise(async (resolve, reject) => {
@@ -187,7 +188,7 @@ async function algorand_communication() {
       .catch(error => error(`An error occurred: ${error.message}`));
       promise_list.push(myPromise)
     }
-    final_time = new Date().getTime() - start
+    final_elapsed_time = new Date().getTime() - start
     console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
     console.log("Txns/sec: ", 1000*txns_total/(new Date().getTime() - start))
     console.log("Time spent in confirmation: ", time_in_confirmation.reduce((partialSum, a) => partialSum + a, 0))
@@ -198,7 +199,7 @@ async function algorand_communication() {
     }
     console.log("Final round: ", status['last-round']);
     console.log("Final txns/sec: ", 1000*(txns_total/final_time))
-    console.log("Txns sent sec: ", final_time)
+    console.log("Client ran for the following (ms): ", final_elapsed_time)
     // /* TODO Get response and forward on to the client interface */
     
 }

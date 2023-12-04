@@ -95,9 +95,8 @@ func OpenPipeWriter(pipePath string, pipeInput <-chan []byte) error {
 			loggedWrite(writer, data)
 			writer.Flush()
 		}
-
+        fmt.Println("Write Pipe is closing HERE!")
 	}(pipeInput)
-
 	return nil
 }
 

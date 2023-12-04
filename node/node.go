@@ -65,7 +65,7 @@ import (
 
 const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
-	durationRunTest                           = 420 * time.Second
+	durationRunTest                           = 900 * time.Second
 )
 
 const (
@@ -364,7 +364,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 			node.log.Infof("UNABLE TO CREATE PIPE: %v", err)
 		}
 		node.log.Infof("Pipe created for input!")
-		rawData := make(chan []byte)
+		rawData := make(chan []byte, 5000)
 		defer close(rawData)
 		err = ipc.OpenPipeWriter(path_to_algorand, rawData)
 		if err != nil {
@@ -379,34 +379,40 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		note_set := make(map[basics.MicroAlgos]struct{})
 
 		for time.Since(start) < durationRunTest {
+            node.log.Infof("This is the start of the for loop! At time: %v", time.Since(start))
 			txn_list_length := 0
 			var txns []transactions.SignedTxn
 			currentRnd = node.ledger.Latest()
 			for txn_list_length < 1 {
-				if currentRnd > startRnd {
+				if time.Since(start) >= durationRunTest {
+                        break
+                }
+                if currentRnd > startRnd {
 					block, err := node.ledger.Block(currentRnd)
 					_ = block
 					if err != nil {
 						node.log.Errorf("Unable to get latest block: %v", err)
+                        continue
 					}
 					metadata_and_txns, err := block.DecodePaysetFlat()
 					if err != nil {
 						node.log.Errorf("Unable to get block transactions: %v", err)
+                        continue
 					}
 					txns = make([]transactions.SignedTxn, len(metadata_and_txns))
 					for i := range metadata_and_txns {
 						txns[i] = metadata_and_txns[i].SignedTxn
 					}
 					txn_list_length = len(txns)
-					node.log.Infof("Transactions have been detected! Number: {}", txn_list_length)
-					node.log.Infof("SUCCEED: Found transactions between rounds start {} and end {}", startRnd, currentRnd)
+					node.log.Infof("Transactions have been detected! Number: %v", txn_list_length)
+					node.log.Infof("SUCCEED: Found transactions between rounds start %v and end %v", startRnd, currentRnd)
 					startRnd = currentRnd
 					continue
 				}
 				time.Sleep(1 * time.Millisecond)
 				currentRnd = node.ledger.Latest()
 			}
-			node.log.Infof("FINAL!!!!!! Transactions list length: {} and Initial Sequence No. %v", txn_list_length, sequenceNumber)
+			node.log.Infof("FINAL!!!!!! Transactions list length: %v and Initial Sequence No. %v", txn_list_length, sequenceNumber)
 			for index := 0; index < txn_list_length; index += 1 {
 				// Ensure no duplicate messages
 				if _, exists := note_set[txns[index].Txn.Amount]; exists {
@@ -419,7 +425,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 				filename := "/home/scrooge/100_byte_payload.txt" //string(txns[0].Txn.Note)
 				payload, err := os.ReadFile(filename)
 				if err != nil {
-					node.log.Errorf("UNABLE TO READ FILE {}", err)
+					node.log.Errorf("UNABLE TO READ FILE %v", err)
 					continue
 				}
 				node.log.Infof("Payload about to be loaded!")
@@ -437,14 +443,17 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 				node.log.Infof("Payload successfully loaded! It is size: %v", len(payload))
 				requestBytes, err := proto.Marshal(request)
 				if err == nil {
+                    node.log.Infof("Bytes ABOUT TO BE sent over the ipc NEW!")
 					rawData <- requestBytes
-					node.log.Infof("Bytes sent over the ipc NEW!")
+					node.log.Infof("Bytes ACTUALLY sent over the ipc NEW!")
 					note_set[txns[index].Txn.Amount] = struct{}{}
 				}
 				sequenceNumber += 1
+                node.log.Infof("NEW SEQUENCE NUMBER IS NOW: %v", sequenceNumber)
 			}
-			node.log.Infof("DONE WITH THE FOR LOOP!!! Final SEQUENCE number is:  %v", sequenceNumber)
+			node.log.Infof("DONE WITH THE FOR LOOP!!! Final SEQUENCE number is:  %v with time elapsed: %v", sequenceNumber, time.Since(start))
 		}
+        node.log.Infof("Timer is up for sending! Exiting function at time: %v with duration %v", time.Now(), time.Since(start))
 	}()
 
 	/***** Scrooge Output *****/
