@@ -14,7 +14,7 @@ func check(e error) {
 }
 
 func main() {
-	filename := "/proj/ove-PG0/murray/payload/100_byte_payload.txt"
+	filename := "/home/scrooge/100_byte_payload.txt"
 
 	dat, err := os.ReadFile(filename)
 	check(err)
