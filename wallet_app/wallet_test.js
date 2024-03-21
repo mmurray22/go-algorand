@@ -144,38 +144,13 @@ async function algorand_communication() {
       const myPromise = new Promise(async (resolve, reject) => {
         try {
           txns_in_flight += 1
-          //console.log("In the promise number of txns: ", txns_in_flight)
           const {txId} = await algodClientNode1.sendRawTransaction(txBytes).do();
-          //console.log("Getting here???");
           txns_sent += 1
-          // console.log("~~~~~~~~~Txns SENT total~~~~~~~~~~~~~~~~: ", txns_sent)
-          // console.log("Txns sent/sec: ", 1000*txns_sent/(new Date().getTime() - start))
-          // console.log("Txns in flight sec: ", (new Date().getTime() - start))
-          // held_tx = txId
           txns_in_flight -= 1
-          // const result = await testWaitForConfirmation(algodClientNode1, txId, 4);
           txns_total += 1
-          //console.log("Result: ", result)
           console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
-          // console.log("Txns/sec: ", 1000*txns_total/(new Date().getTime() - start))
-          // console.log("Number of txn bytes: ", Buffer.byteLength(txBytes))
-          // console.log("Txns sent sec: ", (new Date().getTime() - start))
-          // if ((new Date().getTime() - start) >= 30000) {
-          //   if (not_thirty) {
-          //     thirty_secs = txns_total
-          //     not_thirty = false
-          //   } 
-          //   if (max_rate < 1000*txns_total/(new Date().getTime() - start)) {
-          //     max_rate = 1000*txns_total/(new Date().getTime() - start)
-          //   }
-          //   if (min_rate > 1000*txns_total/(new Date().getTime() - start)) {
-          //     min_rate = 1000*txns_total/(new Date().getTime() - start)
-          //   }
-          //   avg_tput += 1000*txns_total/(new Date().getTime() - start)
-          //   // console.log("~~~~~~~~~~~~~~AVG Tput over time~~~~~~~~~~~~~~~: ", avg_tput/(txns_total-thirty_secs))
-          //   // console.log("~~~~~~~~~~~~~~MAX Tput over time~~~~~~~~~~~~~~~: ", max_rate)
-          //   // console.log("~~~~~~~~~~~~~~MIN Tput over time~~~~~~~~~~~~~~~: ", min_rate)
-          // }
+          console.log("Txns/sec: ", 1000*txns_total/(new Date().getTime() - start))
+          console.log("Elapsed time(s): ", (new Date().getTime() - start)/1000)
           resolve(txId)
         } catch (error) {
           console.log("ERROR IN TRANSACTION: ", error/*algodClientNode1.pendingTransactionInformation(held_tx)*/);
@@ -200,7 +175,5 @@ async function algorand_communication() {
     console.log("Final round: ", status['last-round']);
     console.log("Final txns/sec: ", 1000*(txns_total/final_time))
     console.log("Client ran for the following (ms): ", final_elapsed_time)
-    // /* TODO Get response and forward on to the client interface */
-    
 }
 algorand_communication();

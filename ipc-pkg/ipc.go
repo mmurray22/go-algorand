@@ -105,7 +105,7 @@ func loggedRead(reader io.Reader, numBytes uint64) []byte {
 	bytesRead, readErr := io.ReadFull(reader, readData)
 
 	if readErr != nil {
-		fmt.Println("Pipe Writing Error READ: ", readErr, "[Desired Write size = ", numBytes, " Actually written size = ", bytesRead, "]")
+		fmt.Println("Pipe Reading Error READ: ", readErr, "[Desired Write size = ", numBytes, " Actually written size = ", bytesRead, "]")
 		return nil
 	} else {
 		return readData
