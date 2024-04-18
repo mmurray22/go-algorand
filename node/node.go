@@ -65,7 +65,7 @@ import (
 
 const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
-	durationRunTest                           = 150 * time.Second
+	durationRunTest                           = 900 * time.Second
 )
 
 const (
