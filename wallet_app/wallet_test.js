@@ -71,7 +71,7 @@ async function algorand_communication() {
     notes = []
     final_txn = false
     counter = 0
-    const durationToRun = 900000
+    const durationToRun = 120000
     const algodClientNode1 = new algosdk.Algodv2(api_token1, serverUrl, algoPort1);
     const accounts = await getLocalAccounts(serverUrl, kmdPort1, kmd_token1);
     console.log('Accounts: ', accounts);
@@ -80,7 +80,7 @@ async function algorand_communication() {
     /******************************** FIX THE THROUGHPUT MEASUREMENT HERE ************************/
     var algorandListener = net.createServer((connection) => {
       connection.on('data', function (data) {
-        console.log("Received from algorand!!!! ", data.toString());
+        //console.log("Received from algorand!!!! ", data.toString());
       });
     });
     algorandListener.on('listening', () => {
@@ -135,7 +135,7 @@ async function algorand_communication() {
       });
       const signedTxn = txn.signTxn(accounts[0].privateKey);
       const txBytes = Buffer.from(signedTxn, 'base64')
-      while (txns_in_flight >= 1000 && new Date().getTime() - start < durationToRun) { // Use at maximum a 700 here to account for the maximum size of the transaction
+      while (txns_in_flight >= 700 /*1000*/ && new Date().getTime() - start < durationToRun) { // Use at maximum a 700 here to account for the maximum size of the transaction
         await promise_list.shift();
       }
       if (new Date().getTime() - start >= durationToRun) {
@@ -156,7 +156,7 @@ async function algorand_communication() {
           // const result = await testWaitForConfirmation(algodClientNode1, txId, 4);
           txns_total += 1
           //console.log("Result: ", result)
-          console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
+          //tODO - uncomment console.log("~~~~~~~~~Txns total~~~~~~~~~~~~~~~~: ", txns_total)
           // console.log("Txns/sec: ", 1000*txns_total/(new Date().getTime() - start))
           // console.log("Number of txn bytes: ", Buffer.byteLength(txBytes))
           // console.log("Txns sent sec: ", (new Date().getTime() - start))
@@ -184,7 +184,7 @@ async function algorand_communication() {
         }
       });
       myPromise
-      .then(result => console.log(`The result is ${result}`))
+      .then(result => {}/*console.log(`The result is ${result}`)*/)
       .catch(error => error(`An error occurred: ${error.message}`));
       promise_list.push(myPromise)
     }
